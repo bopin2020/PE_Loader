@@ -5,9 +5,15 @@
 const DWORD position_e_magic = 0x00000000;
 const DWORD position_e_lfanew = 0x0000003c;
 
+//size_of_signature
+const DWORD size_of_signature = 0x00000004;
+
 //file_header
 const DWORD position_number_of_section = 0x000000fe;
 const DWORD position_size_of_optional_header = 0x0000010c;
+
+//size_of_file_header
+const DWORD size_of_file_header = 0x00000014;
 
 //optional_header
 const DWORD position_address_of_entry_point = 0x00000120;

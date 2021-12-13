@@ -200,17 +200,16 @@ pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header*
 	pair<unsigned int, DWORD> reloc;
 
 	DWORD position_NT_header;
-	DWORD position_size_of_optional_header;
 	DWORD position_section_headers;
+	DWORD size_of_optional_header;
 
 	position_NT_header = dos_header->get_e_lfanew();
-	position_size_of_optional_header = file_header->get_size_of_optional_header();
+	size_of_optional_header = file_header->get_size_of_optional_header();
 	number_of_section = file_header->get_number_of_section();
-	position_section_headers = position_NT_header + position_size_of_optional_header;
 
-	cout << "inline fucntion " << number_of_section << endl;
-	cout << "inline fucntion2 " << file_header->get_number_of_section() << endl;
+	position_section_headers = position_NT_header + size_of_signature + size_of_file_header + size_of_optional_header;
 	reloc = make_pair(number_of_section, position_section_headers);
+
 	return reloc;
 }
 
@@ -224,7 +223,7 @@ PE_Header::Dos_Header* PE_Header::read_dos_header() {
 	WORD e_magic;
 	DWORD e_lfanew;
 
-	Dos_Header dos_header;
+	static Dos_Header dos_header;
 	ZeroMemory(&dos_header, sizeof(dos_header));
 
 	pe_field_reader(position_e_magic, &e_magic);
@@ -240,7 +239,7 @@ PE_Header::File_Header* PE_Header::read_file_header() {
 	WORD number_of_section;
 	WORD size_of_optional_header;
 
-	File_Header file_header;
+	static File_Header file_header;
 	ZeroMemory(&file_header, sizeof(file_header));
 
 	pe_field_reader(position_number_of_section, &number_of_section);
@@ -261,7 +260,8 @@ PE_Header::Optional_Header* PE_Header::read_optional_header() {
 	DWORD size_of_image;
 	DWORD size_of_headers;
 
-	Optional_Header optional_header;
+	static Optional_Header optional_header;
+
 	ZeroMemory(&optional_header, sizeof(optional_header));
 
 	pe_field_reader(position_address_of_entry_point, &address_of_entrypoint);
@@ -283,7 +283,7 @@ PE_Header::Optional_Header* PE_Header::read_optional_header() {
 
 PE_Header::Section_Header* PE_Header::read_section_header(DWORD base_address_section_headers) {
 
-	PE_Header::Section_Header section_header;
+	static PE_Header::Section_Header section_header;
 	ZeroMemory(&section_header, sizeof(section_header));
 
 	DWORD position_byte_name = base_address_section_headers + offset_byte_name;
@@ -315,15 +315,12 @@ vector<PE_Header::Section_Header*> PE_Header::generate_section_headers(pair<unsi
 
 	unsigned int num_of_section_headers = reloc_section_header.first;
 	DWORD position_section_headers = reloc_section_header.second;
-	
-	cout << num_of_section_headers << endl;
-	
-
 
 	for (int i = 0; i < num_of_section_headers; i++) {
 		PE_Header::Section_Header* section_header;
 		section_header = read_section_header(position_section_headers);
 		section_headers.emplace_back(section_header);
+		cout << hex << position_section_headers << endl;
 		position_section_headers = position_section_headers + offset_section_header;
 	}
 
@@ -343,8 +340,6 @@ int main() {
 
 	pair<unsigned int, DWORD> reloc_section_header = pe_header.reloc_section_header(dos_header, file_header);
 
-	cout << hex << reloc_section_header.first << endl;
-	cout << hex << reloc_section_header.second << endl;
 	pe_header.generate_section_headers(reloc_section_header);
 
 
