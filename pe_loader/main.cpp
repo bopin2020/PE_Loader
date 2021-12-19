@@ -150,7 +150,7 @@ public:
 			this->SizeOfRawData = size_of_raw_data;
 		}
 
-		char* get_byte_name() {
+		string get_byte_name() {
 			return this->ByteName;
 		}
 
@@ -175,11 +175,12 @@ public:
 
 	template <typename T>
 	void pe_field_reader(int p_field, T value);
+	void pe_field_reader(int p_field, string& value);
 	Dos_Header* read_dos_header();
 	File_Header* read_file_header();
 	Optional_Header* read_optional_header();
-	Section_Header* read_section_header(DWORD base_address_section_header);
-	vector<Section_Header*> generate_section_headers(pair<unsigned int, DWORD> reloc_section_header);
+	shared_ptr<Section_Header> read_section_header(DWORD base_address_section_header);
+	vector<shared_ptr<PE_Header::Section_Header>> generate_section_headers(pair<unsigned int, DWORD> reloc_section_header);
 
 	pair<unsigned int, DWORD> reloc_section_header(Dos_Header* dos_header, File_Header* file_header);
 
@@ -213,11 +214,20 @@ pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header*
 	return reloc;
 }
 
+
+void PE_Header::pe_field_reader(int p_field, string& value) {
+	char chrs[40];
+	file_stream.seekp(p_field, readmode);
+	file_stream.read(chrs, sizeof(chrs));
+	value = string(chrs);
+}
+
 template <typename T>
 void PE_Header::pe_field_reader(int p_field, T value) {
 	file_stream.seekp(p_field, readmode);
 	file_stream.read(reinterpret_cast<char*>(value), sizeof(*value));
 }
+
 
 PE_Header::Dos_Header* PE_Header::read_dos_header() {
 	WORD e_magic;
@@ -261,7 +271,6 @@ PE_Header::Optional_Header* PE_Header::read_optional_header() {
 	DWORD size_of_headers;
 
 	static Optional_Header optional_header;
-
 	ZeroMemory(&optional_header, sizeof(optional_header));
 
 	pe_field_reader(position_address_of_entry_point, &address_of_entrypoint);
@@ -281,17 +290,16 @@ PE_Header::Optional_Header* PE_Header::read_optional_header() {
 	return &optional_header;
 }
 
-PE_Header::Section_Header* PE_Header::read_section_header(DWORD base_address_section_headers) {
+shared_ptr<PE_Header::Section_Header> PE_Header::read_section_header(DWORD base_address_section_headers) {
 
-	static PE_Header::Section_Header section_header;
-	ZeroMemory(&section_header, sizeof(section_header));
+	shared_ptr<PE_Header::Section_Header> section_header = make_shared<PE_Header::Section_Header>();
 
 	DWORD position_byte_name = base_address_section_headers + offset_byte_name;
 	DWORD position_virtual_size = base_address_section_headers + offset_virtual_size;
 	DWORD position_virtual_address = base_address_section_headers + offset_virtual_address;
 	DWORD position_size_of_raw_data = base_address_section_headers + offset_size_of_raw_data;
 
-	char byte_name[8];
+	static char byte_name[8];
 	DWORD virtual_size;
 	DWORD virtual_address;
 	DWORD size_of_raw_data;
@@ -301,26 +309,26 @@ PE_Header::Section_Header* PE_Header::read_section_header(DWORD base_address_sec
 	pe_field_reader(position_virtual_address, &virtual_address);
 	pe_field_reader(position_size_of_raw_data, &size_of_raw_data);
 
-	section_header.set_byte_name(byte_name);
-	section_header.set_virtual_size(virtual_size & trans_sympol);
-	section_header.set_virtual_address(virtual_address & trans_sympol);
-	section_header.set_size_of_raw_data(size_of_raw_data & trans_sympol);
+	section_header->set_byte_name(byte_name);
+	section_header->set_virtual_size(virtual_size & trans_sympol);
+	section_header->set_virtual_address(virtual_address & trans_sympol);
+	section_header->set_size_of_raw_data(size_of_raw_data & trans_sympol);
 
-	return &section_header;
+	return section_header;
 
 }
 
-vector<PE_Header::Section_Header*> PE_Header::generate_section_headers(pair<unsigned int, DWORD> reloc_section_header) {
-	vector<PE_Header::Section_Header*> section_headers;
+vector<shared_ptr<PE_Header::Section_Header>> PE_Header::generate_section_headers(pair<unsigned int, DWORD> reloc_section_header) {
+	vector<shared_ptr<PE_Header::Section_Header>> section_headers;
 
 	unsigned int num_of_section_headers = reloc_section_header.first;
 	DWORD position_section_headers = reloc_section_header.second;
 
 	for (int i = 0; i < num_of_section_headers; i++) {
-		PE_Header::Section_Header* section_header;
-		section_header = read_section_header(position_section_headers);
+		shared_ptr<PE_Header::Section_Header> section_header = read_section_header(position_section_headers);
 		section_headers.emplace_back(section_header);
-		cout << hex << position_section_headers << endl;
+		cout << section_header->get_byte_name() << endl;
+		cout << hex << section_header->get_virtual_size() << endl;
 		position_section_headers = position_section_headers + offset_section_header;
 	}
 
@@ -337,10 +345,8 @@ int main() {
 	PE_Header::Dos_Header* dos_header = pe_header.read_dos_header();
 	PE_Header::File_Header* file_header = pe_header.read_file_header();
 	PE_Header::Optional_Header* option_header = pe_header.read_optional_header();
-
 	pair<unsigned int, DWORD> reloc_section_header = pe_header.reloc_section_header(dos_header, file_header);
-
-	pe_header.generate_section_headers(reloc_section_header);
+	vector<shared_ptr<PE_Header::Section_Header>> section_headers = pe_header.generate_section_headers(reloc_section_header);
 
 
 	return 0;
