@@ -264,7 +264,7 @@ PE_Header::File_Header* PE_Header::read_file_header() {
 PE_Header::Optional_Header* PE_Header::read_optional_header() {
 
 	DWORD address_of_entrypoint;
-	DWORD image_base;
+	ULONGLONG image_base;
 	DWORD section_alignment;
 	DWORD file_alignment;
 	DWORD size_of_image;
@@ -327,8 +327,6 @@ vector<shared_ptr<PE_Header::Section_Header>> PE_Header::generate_section_header
 	for (int i = 0; i < num_of_section_headers; i++) {
 		shared_ptr<PE_Header::Section_Header> section_header = read_section_header(position_section_headers);
 		section_headers.emplace_back(section_header);
-		cout << section_header->get_byte_name() << endl;
-		cout << hex << section_header->get_virtual_size() << endl;
 		position_section_headers = position_section_headers + offset_section_header;
 	}
 
