@@ -184,6 +184,12 @@ public:
 
 	pair<unsigned int, DWORD> reloc_section_header(Dos_Header* dos_header, File_Header* file_header);
 
+	void write_to_imagebuffer(PE_Header::Dos_Header* dos_header,
+							  PE_Header::File_Header* file_header,
+							  PE_Header::Optional_Header* option_header,
+							  vector<shared_ptr<PE_Header::Section_Header>> section_headers
+	);
+
 };
 
 
@@ -215,7 +221,7 @@ pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header*
 }
 
 
-void PE_Header::pe_field_reader(int p_field, string& value) {
+void PE_Header::write_mem(int p_field, string& value) {
 	char chrs[40];
 	file_stream.seekp(p_field, readmode);
 	file_stream.read(chrs, sizeof(chrs));
@@ -331,6 +337,26 @@ vector<shared_ptr<PE_Header::Section_Header>> PE_Header::generate_section_header
 	}
 
 	return section_headers;
+
+}
+
+void PE_Header::write_to_imagebuffer(
+									PE_Header::Dos_Header* dos_header,
+									PE_Header::File_Header* file_header,
+									PE_Header::Optional_Header* option_header,
+									vector<shared_ptr<PE_Header::Section_Header>> section_headers
+									) {
+
+
+	DWORD position_file = 0x00000000;
+	DWORD size_of_image = option_header->get_size_of_image();
+	DWORD size_of_headers = option_header->get_size_of_headers();
+	DWORD section_alignment = option_header->get_section_alignment();
+
+	char* image_buffer_p = (char*)malloc(size_of_image);
+	file_stream.seekp(0, readmode);
+	memmove((void*)image_buffer_p,);
+
 
 }
 
