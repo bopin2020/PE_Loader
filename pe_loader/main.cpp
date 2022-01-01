@@ -173,6 +173,8 @@ public:
 	PE_Header(const char* file_name);
 	~PE_Header();
 
+	DWORD* get_file_buffer_pointer();
+
 	template <typename T>
 	void pe_field_reader(int p_field, T value);
 	void pe_field_reader(int p_field, string& value);
@@ -185,9 +187,9 @@ public:
 	pair<unsigned int, DWORD> reloc_section_header(Dos_Header* dos_header, File_Header* file_header);
 
 	void write_to_imagebuffer(PE_Header::Dos_Header* dos_header,
-							  PE_Header::File_Header* file_header,
-							  PE_Header::Optional_Header* option_header,
-							  vector<shared_ptr<PE_Header::Section_Header>> section_headers
+		PE_Header::File_Header* file_header,
+		PE_Header::Optional_Header* option_header,
+		vector<shared_ptr<PE_Header::Section_Header>> section_headers
 	);
 
 };
@@ -199,6 +201,25 @@ PE_Header::PE_Header(const char* file_name) {
 
 PE_Header::~PE_Header() {
 	file_stream.close();
+}
+
+DWORD* PE_Header::get_file_buffer_pointer() {
+	int i = 3;
+	DWORD* file_adr;
+	file_stream.seekg(0, file_stream.end);
+	size_t size_file = file_stream.tellg();
+	
+	shared_ptr<char> unique_file_p(static_cast<char*>(malloc(sizeof(size_file))), free);
+
+	file_stream.seekp(0, readmode);
+	file_stream.read(unique_file_p.get(), size_file);
+
+	cout << unique_file_p.use_count() << endl;
+
+	return (DWORD*)(&i);
+	//file_adr = (DWORD*)unique_file_p;
+	//return file_adr;
+
 }
 
 pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header* dos_header, PE_Header::File_Header* file_header) {
@@ -221,17 +242,18 @@ pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header*
 }
 
 
-void PE_Header::write_mem(int p_field, string& value) {
-	char chrs[40];
-	file_stream.seekp(p_field, readmode);
-	file_stream.read(chrs, sizeof(chrs));
-	value = string(chrs);
-}
+//void PE_Header::write_mem(int p_field, string& value) {
+//	char chrs[40];
+//	file_stream.seekp(p_field, readmode);
+//	file_stream.read(chrs, sizeof(chrs));
+//	value = string(chrs);
+//}
 
 template <typename T>
 void PE_Header::pe_field_reader(int p_field, T value) {
 	file_stream.seekp(p_field, readmode);
 	file_stream.read(reinterpret_cast<char*>(value), sizeof(*value));
+
 }
 
 
@@ -341,21 +363,25 @@ vector<shared_ptr<PE_Header::Section_Header>> PE_Header::generate_section_header
 }
 
 void PE_Header::write_to_imagebuffer(
-									PE_Header::Dos_Header* dos_header,
-									PE_Header::File_Header* file_header,
-									PE_Header::Optional_Header* option_header,
-									vector<shared_ptr<PE_Header::Section_Header>> section_headers
-									) {
-
+	PE_Header::Dos_Header* dos_header,
+	PE_Header::File_Header* file_header,
+	PE_Header::Optional_Header* option_header,
+	vector<shared_ptr<PE_Header::Section_Header>> section_headers) {
 
 	DWORD position_file = 0x00000000;
 	DWORD size_of_image = option_header->get_size_of_image();
 	DWORD size_of_headers = option_header->get_size_of_headers();
 	DWORD section_alignment = option_header->get_section_alignment();
 
+	DWORD* file_buffer = get_file_buffer_pointer();
 	char* image_buffer_p = (char*)malloc(size_of_image);
-	file_stream.seekp(0, readmode);
-	memmove((void*)image_buffer_p,);
+
+	file_stream.seekp(position_file, readmode);
+	memset(image_buffer_p, 0, size_of_image);
+	memmove((void*)image_buffer_p, file_buffer, size_of_headers);
+
+	free(file_buffer);
+	free(image_buffer_p);
 
 
 }
@@ -371,6 +397,10 @@ int main() {
 	PE_Header::Optional_Header* option_header = pe_header.read_optional_header();
 	pair<unsigned int, DWORD> reloc_section_header = pe_header.reloc_section_header(dos_header, file_header);
 	vector<shared_ptr<PE_Header::Section_Header>> section_headers = pe_header.generate_section_headers(reloc_section_header);
+	//DWORD* p = pe_header.get_file_buffer_pointer();
+	pe_header.write_to_imagebuffer(dos_header, file_header, option_header, section_headers);
+
+
 
 
 	return 0;
