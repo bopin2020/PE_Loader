@@ -4,6 +4,7 @@
 #include<filesystem>
 #include<vector>
 #include"pe_headers.hpp"
+#include"utils.hpp"
 
 using namespace std;
 using namespace std::filesystem;
@@ -132,6 +133,7 @@ public:
 		DWORD virtualSize;
 		DWORD VirtualAddress;
 		DWORD SizeOfRawData;
+		DWORD PointerToRawData;
 
 	public:
 		void set_byte_name(char* byte_name) {
@@ -150,6 +152,10 @@ public:
 			this->SizeOfRawData = size_of_raw_data;
 		}
 
+		void set_point_to_raw_data(DWORD pointer_to_raw_data) {
+			this->PointerToRawData = pointer_to_raw_data;
+		}
+
 		string get_byte_name() {
 			return this->ByteName;
 		}
@@ -166,14 +172,16 @@ public:
 			return this->SizeOfRawData;
 		}
 
+		DWORD get_pointer_to_raw_data() {
+			return this->PointerToRawData;
+		}
+
 	};
 
 
 public:
 	PE_Header(const char* file_name);
 	~PE_Header();
-
-	DWORD* get_file_buffer_pointer();
 
 	template <typename T>
 	void pe_field_reader(int p_field, T value);
@@ -185,6 +193,8 @@ public:
 	vector<shared_ptr<PE_Header::Section_Header>> generate_section_headers(pair<unsigned int, DWORD> reloc_section_header);
 
 	pair<unsigned int, DWORD> reloc_section_header(Dos_Header* dos_header, File_Header* file_header);
+
+	unique_ptr<char> get_file_buffer_pointer();
 
 	void write_to_imagebuffer(PE_Header::Dos_Header* dos_header,
 		PE_Header::File_Header* file_header,
@@ -203,22 +213,15 @@ PE_Header::~PE_Header() {
 	file_stream.close();
 }
 
-DWORD* PE_Header::get_file_buffer_pointer() {
-	int i = 3;
-	DWORD* file_adr;
+unique_ptr<char> PE_Header::get_file_buffer_pointer() {
 	file_stream.seekg(0, file_stream.end);
 	size_t size_file = file_stream.tellg();
-	
-	shared_ptr<char> unique_file_p(static_cast<char*>(malloc(sizeof(size_file))), free);
+	unique_ptr<char> file_buff_p(new char[size_file]);
 
 	file_stream.seekp(0, readmode);
-	file_stream.read(unique_file_p.get(), size_file);
+	file_stream.read(file_buff_p.get(), size_file);
 
-	cout << unique_file_p.use_count() << endl;
-
-	return (DWORD*)(&i);
-	//file_adr = (DWORD*)unique_file_p;
-	//return file_adr;
+	return file_buff_p;
 
 }
 
@@ -241,13 +244,6 @@ pair<unsigned int, DWORD> PE_Header::reloc_section_header(PE_Header::Dos_Header*
 	return reloc;
 }
 
-
-//void PE_Header::write_mem(int p_field, string& value) {
-//	char chrs[40];
-//	file_stream.seekp(p_field, readmode);
-//	file_stream.read(chrs, sizeof(chrs));
-//	value = string(chrs);
-//}
 
 template <typename T>
 void PE_Header::pe_field_reader(int p_field, T value) {
@@ -308,6 +304,7 @@ PE_Header::Optional_Header* PE_Header::read_optional_header() {
 	pe_field_reader(position_size_of_image, &size_of_image);
 	pe_field_reader(position_size_of_headers, &size_of_headers);
 
+
 	optional_header.set_address_of_entry_point(address_of_entrypoint & trans_sympol);
 	optional_header.set_image_base(image_base & trans_sympol);
 	optional_header.set_section_alignment(section_alignment & trans_sympol);
@@ -326,21 +323,25 @@ shared_ptr<PE_Header::Section_Header> PE_Header::read_section_header(DWORD base_
 	DWORD position_virtual_size = base_address_section_headers + offset_virtual_size;
 	DWORD position_virtual_address = base_address_section_headers + offset_virtual_address;
 	DWORD position_size_of_raw_data = base_address_section_headers + offset_size_of_raw_data;
+	DWORD position_pointer_to_raw_data = base_address_section_headers + offset_pointer_to_raw_data;
 
 	static char byte_name[8];
 	DWORD virtual_size;
 	DWORD virtual_address;
 	DWORD size_of_raw_data;
+	DWORD pointer_to_raw_data;
 
 	pe_field_reader(position_byte_name, &byte_name);
 	pe_field_reader(position_virtual_size, &virtual_size);
 	pe_field_reader(position_virtual_address, &virtual_address);
 	pe_field_reader(position_size_of_raw_data, &size_of_raw_data);
+	pe_field_reader(position_pointer_to_raw_data, &pointer_to_raw_data);
 
 	section_header->set_byte_name(byte_name);
 	section_header->set_virtual_size(virtual_size & trans_sympol);
 	section_header->set_virtual_address(virtual_address & trans_sympol);
 	section_header->set_size_of_raw_data(size_of_raw_data & trans_sympol);
+	section_header->set_point_to_raw_data(pointer_to_raw_data & trans_sympol);
 
 	return section_header;
 
@@ -362,6 +363,7 @@ vector<shared_ptr<PE_Header::Section_Header>> PE_Header::generate_section_header
 
 }
 
+
 void PE_Header::write_to_imagebuffer(
 	PE_Header::Dos_Header* dos_header,
 	PE_Header::File_Header* file_header,
@@ -373,16 +375,29 @@ void PE_Header::write_to_imagebuffer(
 	DWORD size_of_headers = option_header->get_size_of_headers();
 	DWORD section_alignment = option_header->get_section_alignment();
 
-	DWORD* file_buffer = get_file_buffer_pointer();
-	char* image_buffer_p = (char*)malloc(size_of_image);
+	unique_ptr<char> file_buffer_p = get_file_buffer_pointer();
+	unique_ptr<char> image_buffer_p(new char[size_of_image]);
+
+	char* file_buffer = file_buffer_p.get();
+	char* image_buffer = image_buffer_p.get();
 
 	file_stream.seekp(position_file, readmode);
-	memset(image_buffer_p, 0, size_of_image);
-	memmove((void*)image_buffer_p, file_buffer, size_of_headers);
+	memset(image_buffer, 0, size_of_image);
 
-	free(file_buffer);
-	free(image_buffer_p);
+	size_t image_size_of_headers = get_section_images_buffer(size_of_headers, section_alignment);
+	memmove((void*)image_buffer, file_buffer, size_of_headers);
+	image_buffer = image_buffer + image_size_of_headers;
 
+	for (auto item : section_headers) {
+		auto section_header = item.get();
+		DWORD virtual_address = section_header->get_virtual_size();
+		DWORD pointer_to_raw_data = section_header->get_pointer_to_raw_data();
+		DWORD size_of_raw_data = section_header->get_size_of_raw_data();
+
+		file_buffer = file_buffer + pointer_to_raw_data;
+		memmove((void*)image_buffer, file_buffer, size_of_raw_data);
+		image_buffer = image_buffer + virtual_address;
+	}
 
 }
 

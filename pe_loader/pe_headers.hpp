@@ -30,3 +30,4 @@ const DWORD offset_virtual_size = 0x00000008;
 const DWORD offset_virtual_address = 0x0000000c;
 const DWORD offset_size_of_raw_data = 0x00000010;
 const DWORD offset_section_header = 0x00000028;
+const DWORD offset_pointer_to_raw_data = 0x00000014;
